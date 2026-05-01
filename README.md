@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 [![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/PVvCcU7T)
 
 
@@ -41,3 +42,6 @@ This project models the Sokoban game as a search problem and solves it using cla
 - **Teaching Assistants**: Marzieh Karami, Masih Roughani, Fatemeh Sayadzade
 - **Semester**: Spring 2026 (1404-1405)
 - **Department**: Faculty of Computer Engineering, University of Isfahan
+=======
+# sokoban
+>>>>>>> 2b0506c843d27bb50b9440bd3c92433710f74ee7
