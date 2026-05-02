@@ -135,6 +135,7 @@ def ucs_solve(game):
 
 
 def astar_solve(game):
+    
     def assignment_min_cost(cost_matrix):
         n = len(cost_matrix)
         u = [0] * (n + 1)
@@ -183,69 +184,65 @@ def astar_solve(game):
                 assignment[p[j] - 1] = j - 1
         return assignment
 
-    def heuristic(State):
-        player_pos = State.get_player_pos()
-        boxes = State.get_boxes()
-        targets = game.get_targets()
+    def heuristic(state):
+        player = state.get_player_pos()
+        boxes = state.get_boxes()          # list / frozenset of (x, y)
+        targets = game.get_targets()       # list of (x, y)
 
         n = len(boxes)
         if n == 0:
             return 0
 
+        # Build cost matrix: push cost = 5 * Manhattan distance
+        # A box on a target with distance 0 adds nothing.
         cost_matrix = []
         for bx, by in boxes:
-            row = []
-            for tx, ty in targets:
-                # Manhattan distance
-                row.append(abs(bx - tx) + abs(by - ty))
+            row = [5 * (abs(bx - tx) + abs(by - ty)) for tx, ty in targets]
             cost_matrix.append(row)
 
         assignment = assignment_min_cost(cost_matrix)
-        total_box_dist = sum(cost_matrix[i][assignment[i]] for i in range(n))
+        push_cost = sum(cost_matrix[i][assignment[i]] for i in range(n))
 
-        player_to_boxes = 0 
+        # Player must reach a cell adjacent to some unsolved box.
+        # The distance to a pushable cell is at least max(0, manhattan - 1).
+        unsolved = [b for b in boxes if b not in targets]
+        if not unsolved:
+            return push_cost  # all boxes already on targets
 
-        for box in boxes:
-            if box in targets:
-                continue
+        player_moves = min(
+            max(0, abs(player[0] - bx) + abs(player[1] - by) - 1)
+            for bx, by in unsolved
+        )
+        # total estimated remaining cost = player moves + push cost
+        return push_cost + player_moves
 
-            box_distance = abs(player_pos[0] - box[0]) + abs(player_pos[0] - box[0])
-            player_to_boxes += box_distance
-
-        return player_to_boxes + total_box_dist
-
-
+    
     start_state = game.get_initial_state()
 
     pq = PriorityQueue()
     tiebreak = 0
-    pq.put((0, tiebreak, start_state, []))
+    start_h = heuristic(start_state)
+    pq.put((start_h, tiebreak, start_state, 0, []))  # (f, tiebreak, state, g, actions)
     tiebreak += 1
 
-    best_cost = {start_state: 0}     # best known cost to reach a state
-    visited = set()                  # already expanded states
+    best_g = {start_state: 0}   # best known g-value for each state
 
     while not pq.empty():
-        cost, _, state, actions = pq.get()
+        f, _, state, g, actions = pq.get()
 
-        # If this state was already expanded, skip
-        if state in visited:
+        # If we already know a cheaper path to this state, skip.
+        if g > best_g.get(state, float('inf')):
             continue
-
-        # Mark as visited
-        visited.add(state)
 
         if game.is_goal(state):
             return actions
 
         for action, next_state, step_cost in game.get_successors(state):
-            new_cost = cost + step_cost
-            # If we found a better path, or the state hasn't been seen yet
-            if next_state not in best_cost or new_cost < best_cost[next_state]:
-                best_cost[next_state] = new_cost
-                pq.put((new_cost + heuristic(next_state), tiebreak, next_state, actions + [action]))
+            new_g = g + step_cost
+            if new_g < best_g.get(next_state, float('inf')):
+                best_g[next_state] = new_g
+                new_f = new_g + heuristic(next_state)
+                pq.put((new_f, tiebreak, next_state, new_g, actions + [action]))
                 tiebreak += 1
 
-    return None
-    
-
+    return None  # no solution
