@@ -1,6 +1,6 @@
 import collections
 from queue import PriorityQueue
-from script import assignment_min_cost
+import script
 
 
 def bfs_solve(game):
@@ -165,7 +165,7 @@ def astar_solve(game):
             cost_matrix.append(row)
 
         # Solve the assignment problem to get the minimal total push cost.
-        assignment = assignment_min_cost(cost_matrix)
+        assignment = script.assignment_min_cost(cost_matrix)
         push_cost = sum(cost_matrix[i][assignment[i]] for i in range(n))
 
         # Player must at some point stand next to a box to push it.
@@ -173,6 +173,10 @@ def astar_solve(game):
         unsolved = [b for b in boxes if b not in targets]
         if not unsolved:
             return push_cost   # all boxes are already on targets
+
+        for box in boxes:
+            if script.is_deadlocked(box,targets,game):
+                return float("inf")
 
         player_moves = min(
             max(0, abs(player[0] - bx) + abs(player[1] - by) - 1)

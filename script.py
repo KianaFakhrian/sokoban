@@ -1,3 +1,50 @@
+def axis_free(game, x, y, axis):
+    """
+    Returns True if a box at (x,y) can be pushed along the given axis.
+    axis = 0 → horizontal (left/right), axis = 1 → vertical (up/down)
+    A box can only move on an axis if both immediate neighbours in that
+    direction are free (not walls and inside the grid).
+    """
+    width  = game.get_grid_width()
+    height = game.get_grid_height()
+    if axis == 0:          # horizontal
+        left  = x - 1
+        right = x + 1
+        left_ok  = (left >= 0) and not game.is_wall((left, y))
+        right_ok = (right < width) and not game.is_wall((right, y))
+        return left_ok and right_ok
+    else:                  # vertical
+        up   = y - 1
+        down = y + 1
+        up_ok    = (up >= 0) and not game.is_wall((x, up))
+        down_ok  = (down < height) and not game.is_wall((x, down))
+        return up_ok and down_ok
+
+
+def is_deadlocked(box, targets, game):
+    """
+    Simple deadlock detection for a single box.
+    Returns True if the box is stuck and cannot reach any target.
+    """
+    x, y = box
+
+    # A box already on a target is never deadlocked
+    if (x, y) in targets:
+        return False
+
+    # Check if the box can move at all (in either axis)
+    can_move_horiz = axis_free(game, x, y, 0)
+    can_move_vert  = axis_free(game, x, y, 1)
+
+    # If both axes are blocked → box is frozen and not on target → dead
+    if not can_move_horiz and not can_move_vert:
+        return True
+
+    # Optional: add more patterns here if needed (wall line deadlocks, etc.)
+    # For now, the simple freeze check catches most common deadlocks.
+
+    return False
+
 def assignment_min_cost(cost_matrix):
     """
     Hungarian algorithm (Kuhn‑Munkres) for minimum‑cost perfect matching
