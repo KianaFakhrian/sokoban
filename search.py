@@ -1,5 +1,6 @@
 import time
 import collections
+from queue import PriorityQueue
 
 def bfs_solve(game):
     start_state = game.get_initial_state()
@@ -39,43 +40,61 @@ def bfs_solve(game):
 
 def ids_solve(game):
     """
-    Uses Depth-Limited Search (DLS) with increasing depth limits.
-    Returns: List of actions (strings) to reach the goal.
+    Iterative Deepening Search (IDS):
+    Repeatedly calls Depth-Limited Search (DLS) with increasing depth limits,
+    guaranteeing the shallowest goal is found first while using O(d) memory.
+    Returns: List of actions (strings) to reach the goal, or None if unsolvable.
     """
     start_state = game.get_initial_state()
-    # Start with depth 0 and increase gradually
     depth = 0
-    max_depth = 100 #depth limit
+    max_depth = 100  # safety cap to avoid infinite loops if no solution exists
 
     while depth <= max_depth:
-        # checking all the states after depth moves
-        result = dls_solve(game, start_state, depth, [])
+        # visited dict: state → highest remaining depth explored for that state
+        # Fresh for each depth iteration to preserve optimality.
+        visited = {}
+        result = dls_solve(game, start_state, depth, [], set(), visited)
         if result is not None:
             return result
         depth += 1
 
-    return None  # No solution found within max_depth
+    return None  # no solution found within max_depth
 
 
-def dls_solve(game, current_state, limit, path):
-    # Check if goal is reached
-    if game.is_goal(current_state):
+def dls_solve(game, state, limit, path, on_path, visited):
+    """
+    Depth-Limited Search with two pruning mechanisms:
+      1. 'visited' : prunes states already seen with at least as much remaining depth.
+      2. 'on_path'  : prevents cycles within the current recursion branch.
+
+    Returns: action list if goal found, else None.
+    """
+    if game.is_goal(state):
         return path
-
-    # If limit is reached, stop this branch
-    if limit <= 0:
+    if limit <= 0:           # depth cutoff – stop and backtrack
         return None
 
-     # find all the possible moves from the current state
-    successors = game.get_successors(current_state)
-    #next-state : state after the move, path : list of all actions from start to current state
-    for action, next_state, step_cost in successors:
-        new_path = path + [action]
-        # decrease depth limit for the next step and analysing whether there is a solution
-        result = dls_solve(game, next_state, limit - 1, new_path)
+    # --- Prune using the depth-aware visited table ---
+    # If we already explored this state with a remaining depth ≥ current limit,
+    # the current search cannot discover any new solution – skip it.
+    prev_limit = visited.get(state, -1)
+    if prev_limit >= limit:
+        return None
+    visited[state] = limit   # mark this as the best depth we've explored it
+
+    # --- Cycle detection within the current path ---
+    on_path.add(state)
+
+    for action, next_state, step_cost in game.get_successors(state):
+        if next_state in on_path:
+            continue          # would create a cycle, skip
+        # Recurse with one less move allowed
+        result = dls_solve(game, next_state, limit - 1, path + [action], on_path, visited)
         if result is not None:
+            on_path.remove(state)   # clean up before returning
             return result
 
+    on_path.remove(state)            # backtrack: remove from current path
     return None
 
 
@@ -112,6 +131,7 @@ def ucs_solve(game):
                 tiebreak += 1
 
     return None
+
 
 def astar_solve(game):
     def heuristic():
