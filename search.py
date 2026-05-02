@@ -1,6 +1,7 @@
 import time
 import collections
 from queue import PriorityQueue
+import re
 
 def bfs_solve(game):
     start_state = game.get_initial_state()
@@ -134,14 +135,117 @@ def ucs_solve(game):
 
 
 def astar_solve(game):
-    def heuristic():
-        pass
+    def assignment_min_cost(cost_matrix):
+        n = len(cost_matrix)
+        u = [0] * (n + 1)
+        v = [0] * (n + 1)
+        p = [0] * (n + 1)
+        way = [0] * (n + 1)
+
+        for i in range(1, n + 1):
+            p[0] = i
+            j0 = 0
+            minv = [float('inf')] * (n + 1)
+            used = [False] * (n + 1)
+            while True:
+                used[j0] = True
+                i0 = p[j0]
+                delta = float('inf')
+                j1 = 0
+                for j in range(1, n + 1):
+                    if not used[j]:
+                        cur = cost_matrix[i0 - 1][j - 1] - u[i0] - v[j]
+                        if cur < minv[j]:
+                            minv[j] = cur
+                            way[j] = j0
+                        if minv[j] < delta:
+                            delta = minv[j]
+                            j1 = j
+                for j in range(n + 1):
+                    if used[j]:
+                        u[p[j]] += delta
+                        v[j] -= delta
+                    else:
+                        minv[j] -= delta
+                j0 = j1
+                if p[j0] == 0:
+                    break
+            while True:
+                j1 = way[j0]
+                p[j0] = p[j1]
+                j0 = j1
+                if j0 == 0:
+                    break
+
+        assignment = [0] * n
+        for j in range(1, n + 1):
+            if p[j] != 0:
+                assignment[p[j] - 1] = j - 1
+        return assignment
+
+    def heuristic(State):
+        player_pos = State.get_player_pos()
+        boxes = State.get_boxes()
+        targets = game.get_targets()
+
+        n = len(boxes)
+        if n == 0:
+            return 0
+
+        cost_matrix = []
+        for bx, by in boxes:
+            row = []
+            for tx, ty in targets:
+                # Manhattan distance
+                row.append(abs(bx - tx) + abs(by - ty))
+            cost_matrix.append(row)
+
+        assignment = assignment_min_cost(cost_matrix)
+        total_box_dist = sum(cost_matrix[i][assignment[i]] for i in range(n))
+
+        player_to_boxes = 0 
+
+        for box in boxes:
+            if box in targets:
+                continue
+
+            box_distance = abs(player_pos[0] - box[0]) + abs(player_pos[0] - box[0])
+            player_to_boxes += box_distance
+
+        return player_to_boxes + total_box_dist
+
 
     start_state = game.get_initial_state()
 
-    # Your code goes here
-    # this function should return actions
+    pq = PriorityQueue()
+    tiebreak = 0
+    pq.put((0, tiebreak, start_state, []))
+    tiebreak += 1
 
+    best_cost = {start_state: 0}     # best known cost to reach a state
+    visited = set()                  # already expanded states
 
+    while not pq.empty():
+        cost, _, state, actions = pq.get()
 
+        # If this state was already expanded, skip
+        if state in visited:
+            continue
+
+        # Mark as visited
+        visited.add(state)
+
+        if game.is_goal(state):
+            return actions
+
+        for action, next_state, step_cost in game.get_successors(state):
+            new_cost = cost + step_cost
+            # If we found a better path, or the state hasn't been seen yet
+            if next_state not in best_cost or new_cost < best_cost[next_state]:
+                best_cost[next_state] = new_cost
+                pq.put((new_cost + heuristic(next_state), tiebreak, next_state, actions + [action]))
+                tiebreak += 1
+
+    return None
+    
 
