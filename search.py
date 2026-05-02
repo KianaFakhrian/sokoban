@@ -1,123 +1,119 @@
-import time
 import collections
 from queue import PriorityQueue
-import re
+from script import assignment_min_cost
+
 
 def bfs_solve(game):
+    """
+    Breadth‑First Search (unweighted).
+    Guarantees the shortest path in terms of number of actions.
+    """
     start_state = game.get_initial_state()
 
-    # Queue stores tuples of: (current_state, path_list, cost)
+    # Queue elements: (current_state, action_list, total_cost)
     queue = collections.deque([(start_state, [], 0)])
 
-    # Set to keep track of visited states.
-    # We use a tuple of (player_pos, sorted_boxes) as the key because State objects might not be hashable.
+    # Visited set holds (player_pos, frozenset_of_boxes) to detect duplicates.
+    # Using the combination of player position and box positions (as a frozenset)
+    # uniquely identifies a state, even if State objects are not hashable.
     visited = set()
-    # مرتب کردن جعبه ها براساس مختصات ایکس و بعد وای
-    visited.add((start_state.player, tuple(sorted(start_state.boxes))))
+    visited.add((start_state.player, start_state.boxes))
 
     while queue:
         current_state, path, cost = queue.popleft()
 
-        # Check if goal is reached
         if game.is_goal(current_state):
             return path
 
-        # Get all possible successor states
-        # تولید حالت‌های بعدی (Successors
-        successors = game.get_successors(current_state)
-
-        for action, next_state, step_cost in successors:
-
+        for action, next_state, step_cost in game.get_successors(current_state):
             next_key = (next_state.player, next_state.boxes)
 
             if next_key not in visited:
                 visited.add(next_key)
-                new_path = path + [action]
-                new_cost = cost + step_cost
-                #adding new state to the end of queue
-                queue.append((next_state, new_path, new_cost))
+                queue.append((next_state, path + [action], cost + step_cost))
 
-    return None  # No solution found
+    return None   # No solution found
+
 
 def ids_solve(game):
     """
-    Iterative Deepening Search (IDS):
-    Repeatedly calls Depth-Limited Search (DLS) with increasing depth limits,
-    guaranteeing the shallowest goal is found first while using O(d) memory.
-    Returns: List of actions (strings) to reach the goal, or None if unsolvable.
+    Iterative Deepening Search (IDS).
+    Calls Depth‑Limited Search (DLS) with increasing depth limits.
+    Guarantees the shallowest solution (fewest actions), uses O(d) memory.
     """
     start_state = game.get_initial_state()
-    depth = 0
-    max_depth = 100  # safety cap to avoid infinite loops if no solution exists
+    max_depth = 100   # safety cap to avoid infinite loops if no solution exists
 
-    while depth <= max_depth:
-        # visited dict: state → highest remaining depth explored for that state
-        # Fresh for each depth iteration to preserve optimality.
+    for depth in range(max_depth + 1):
+        # visited dict: state → highest remaining depth explored for that state.
+        # It is fresh for each depth iteration to preserve optimality.
         visited = {}
         result = dls_solve(game, start_state, depth, [], set(), visited)
         if result is not None:
             return result
-        depth += 1
 
-    return None  # no solution found within max_depth
+    return None   # no solution found within max_depth
 
 
 def dls_solve(game, state, limit, path, on_path, visited):
     """
-    Depth-Limited Search with two pruning mechanisms:
-      1. 'visited' : prunes states already seen with at least as much remaining depth.
-      2. 'on_path'  : prevents cycles within the current recursion branch.
-
-    Returns: action list if goal found, else None.
+    Depth‑Limited Search (recursive) with two pruning mechanisms:
+      1. `visited` – transposition table recording the maximum remaining depth
+         for which a state has already been fully searched. If we see the same
+         state with an equal or smaller remaining depth, we skip it.
+      2. `on_path` – set of states currently in the recursion stack. This
+         prevents cycles inside the current branch, avoiding infinite recursion.
     """
     if game.is_goal(state):
         return path
-    if limit <= 0:           # depth cutoff – stop and backtrack
+    if limit <= 0:               # depth cutoff – no more moves allowed
         return None
 
-    # --- Prune using the depth-aware visited table ---
-    # If we already explored this state with a remaining depth ≥ current limit,
-    # the current search cannot discover any new solution – skip it.
+    # Prune using depth‑aware visited table
     prev_limit = visited.get(state, -1)
     if prev_limit >= limit:
         return None
-    visited[state] = limit   # mark this as the best depth we've explored it
+    visited[state] = limit
 
-    # --- Cycle detection within the current path ---
+    # Cycle detection within the current path
     on_path.add(state)
 
     for action, next_state, step_cost in game.get_successors(state):
         if next_state in on_path:
-            continue          # would create a cycle, skip
-        # Recurse with one less move allowed
-        result = dls_solve(game, next_state, limit - 1, path + [action], on_path, visited)
+            continue             # would create a cycle, skip this branch
+        # Recurse with one less allowed move
+        result = dls_solve(game, next_state, limit - 1, path + [action],
+                           on_path, visited)
         if result is not None:
-            on_path.remove(state)   # clean up before returning
+            on_path.remove(state)   # clean up before returning success
             return result
 
-    on_path.remove(state)            # backtrack: remove from current path
+    on_path.remove(state)           # backtrack: remove from current path
     return None
 
 
 def ucs_solve(game):
+    """
+    Uniform‑Cost Search.
+    Expands nodes in order of increasing path cost.
+    Optimal for any step costs, but memory‑intensive.
+    """
     start_state = game.get_initial_state()
 
     pq = PriorityQueue()
-    tiebreak = 0
+    tiebreak = 0                     # unique tie‑breaker to avoid comparing states
     pq.put((0, tiebreak, start_state, []))
     tiebreak += 1
 
-    best_cost = {start_state: 0}     # best known cost to reach a state
-    visited = set()                  # already expanded states
+    best_cost = {start_state: 0}     # best known cost to reach each state
+    visited = set()                  # states that have already been expanded
 
     while not pq.empty():
         cost, _, state, actions = pq.get()
 
-        # If this state was already expanded, skip
+        # Skip if this state was already expanded (its optimal cost was found earlier)
         if state in visited:
             continue
-
-        # Mark as visited
         visited.add(state)
 
         if game.is_goal(state):
@@ -125,7 +121,7 @@ def ucs_solve(game):
 
         for action, next_state, step_cost in game.get_successors(state):
             new_cost = cost + step_cost
-            # If we found a better path, or the state hasn't been seen yet
+            # Only enqueue if we found a cheaper path to next_state
             if next_state not in best_cost or new_cost < best_cost[next_state]:
                 best_cost[next_state] = new_cost
                 pq.put((new_cost, tiebreak, next_state, actions + [action]))
@@ -135,56 +131,24 @@ def ucs_solve(game):
 
 
 def astar_solve(game):
-    
-    def assignment_min_cost(cost_matrix):
-        n = len(cost_matrix)
-        u = [0] * (n + 1)
-        v = [0] * (n + 1)
-        p = [0] * (n + 1)
-        way = [0] * (n + 1)
-
-        for i in range(1, n + 1):
-            p[0] = i
-            j0 = 0
-            minv = [float('inf')] * (n + 1)
-            used = [False] * (n + 1)
-            while True:
-                used[j0] = True
-                i0 = p[j0]
-                delta = float('inf')
-                j1 = 0
-                for j in range(1, n + 1):
-                    if not used[j]:
-                        cur = cost_matrix[i0 - 1][j - 1] - u[i0] - v[j]
-                        if cur < minv[j]:
-                            minv[j] = cur
-                            way[j] = j0
-                        if minv[j] < delta:
-                            delta = minv[j]
-                            j1 = j
-                for j in range(n + 1):
-                    if used[j]:
-                        u[p[j]] += delta
-                        v[j] -= delta
-                    else:
-                        minv[j] -= delta
-                j0 = j1
-                if p[j0] == 0:
-                    break
-            while True:
-                j1 = way[j0]
-                p[j0] = p[j1]
-                j0 = j1
-                if j0 == 0:
-                    break
-
-        assignment = [0] * n
-        for j in range(1, n + 1):
-            if p[j] != 0:
-                assignment[p[j] - 1] = j - 1
-        return assignment
+    """
+    A* search using an externally provided admissible heuristic.
+    `heuristic_func(state, game)` should return an estimated cost‑to‑go.
+    Uses a PriorityQueue with tie‑breaking and re‑opens nodes when a cheaper
+    path is found (required for optimality with inconsistent heuristics).
+    """
 
     def heuristic(state):
+        """
+        Admissible heuristic for Sokoban‑like puzzles.
+        Assumptions:
+        - Moving the player costs 1 per step.
+        - Pushing a box costs 5 per step (the box moves one cell at cost 5).
+        The heuristic computes:
+        1. Minimum‑cost assignment of boxes to targets (push cost part).
+        2. Minimum player moves to become adjacent to any unsolved box.
+        Both are lower bounds, so the total is admissible.
+        """
         player = state.get_player_pos()
         boxes = state.get_boxes()          # list / frozenset of (x, y)
         targets = game.get_targets()       # list of (x, y)
@@ -193,44 +157,47 @@ def astar_solve(game):
         if n == 0:
             return 0
 
-        # Build cost matrix: push cost = 5 * Manhattan distance
-        # A box on a target with distance 0 adds nothing.
+        # Build cost matrix: 5 * Manhattan distance for each box → target pair.
+        # If a box is already on a target, its distance is 0, which is correct.
         cost_matrix = []
         for bx, by in boxes:
             row = [5 * (abs(bx - tx) + abs(by - ty)) for tx, ty in targets]
             cost_matrix.append(row)
 
+        # Solve the assignment problem to get the minimal total push cost.
         assignment = assignment_min_cost(cost_matrix)
         push_cost = sum(cost_matrix[i][assignment[i]] for i in range(n))
 
-        # Player must reach a cell adjacent to some unsolved box.
-        # The distance to a pushable cell is at least max(0, manhattan - 1).
+        # Player must at some point stand next to a box to push it.
+        # The distance to that pushable cell is at least max(0, Manhattan_distance_to_box - 1).
         unsolved = [b for b in boxes if b not in targets]
         if not unsolved:
-            return push_cost  # all boxes already on targets
+            return push_cost   # all boxes are already on targets
 
         player_moves = min(
             max(0, abs(player[0] - bx) + abs(player[1] - by) - 1)
             for bx, by in unsolved
         )
-        # total estimated remaining cost = player moves + push cost
+
+        # Total admissible estimate = push cost + player moves
         return push_cost + player_moves
 
-    
+
     start_state = game.get_initial_state()
+    start_h = heuristic(start_state)
 
     pq = PriorityQueue()
     tiebreak = 0
-    start_h = heuristic(start_state)
-    pq.put((start_h, tiebreak, start_state, 0, []))  # (f, tiebreak, state, g, actions)
+    # Tuple: (f_value, tiebreak, state, g_value, action_list)
+    pq.put((start_h, tiebreak, start_state, 0, []))
     tiebreak += 1
 
-    best_g = {start_state: 0}   # best known g-value for each state
+    best_g = {start_state: 0}   # best known g‑value for each state
 
     while not pq.empty():
         f, _, state, g, actions = pq.get()
 
-        # If we already know a cheaper path to this state, skip.
+        # If we already know a cheaper way to reach this state, skip this entry.
         if g > best_g.get(state, float('inf')):
             continue
 
@@ -245,4 +212,4 @@ def astar_solve(game):
                 pq.put((new_f, tiebreak, next_state, new_g, actions + [action]))
                 tiebreak += 1
 
-    return None  # no solution
+    return None   # no solution
