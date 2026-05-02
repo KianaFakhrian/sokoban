@@ -82,9 +82,36 @@ def dls_solve(game, current_state, limit, path):
 def ucs_solve(game):
     start_state = game.get_initial_state()
 
-    # Your code goes here
-    # this function should return actions
+    pq = PriorityQueue()
+    tiebreak = 0
+    pq.put((0, tiebreak, start_state, []))
+    tiebreak += 1
 
+    best_cost = {start_state: 0}     # best known cost to reach a state
+    visited = set()                  # already expanded states
+
+    while not pq.empty():
+        cost, _, state, actions = pq.get()
+
+        # If this state was already expanded, skip
+        if state in visited:
+            continue
+
+        # Mark as visited
+        visited.add(state)
+
+        if game.is_goal(state):
+            return actions
+
+        for action, next_state, step_cost in game.get_successors(state):
+            new_cost = cost + step_cost
+            # If we found a better path, or the state hasn't been seen yet
+            if next_state not in best_cost or new_cost < best_cost[next_state]:
+                best_cost[next_state] = new_cost
+                pq.put((new_cost, tiebreak, next_state, actions + [action]))
+                tiebreak += 1
+
+    return None
 
 def astar_solve(game):
     def heuristic():
